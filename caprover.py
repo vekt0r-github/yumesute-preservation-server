@@ -36,6 +36,21 @@ def configure_database():
     temp.replace(CONFIG)
 
 
+def verify_installed_data():
+    """Avoid creating a starter account when the installed master is missing."""
+    required = [
+        ROOT / "private/upstream/master-original.db",
+        ROOT / "private/upstream/master-manifest.json",
+    ]
+    missing = [str(path.relative_to(ROOT)) for path in required if not path.is_file()]
+    if missing:
+        raise RuntimeError(
+            "Required installed game data is missing: " + ", ".join(missing)
+            + ". Restore these files from /app/data (or the old private mount)"
+            + " before starting. Existing account/database state is unchanged."
+        )
+
+
 def main():
     if len(sys.argv) < 2 or sys.argv[1] not in ("start", "prepare", "doctor"):
         raise RuntimeError("Usage: python caprover.py {start|prepare|doctor} [additional arguments]")
@@ -50,6 +65,7 @@ def main():
     if action == "doctor":
         subprocess.run([sys.executable, "server.py", "doctor", *args], check=True, cwd=ROOT)
         return
+    verify_installed_data()
     public = required("YUMESUTE_PUBLIC_HOST")
     cmd = [
         sys.executable, "server.py", "start", "--no-docker", "--no-browser",
