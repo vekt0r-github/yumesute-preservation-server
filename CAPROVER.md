@@ -8,11 +8,16 @@ Create these persistent directories on the **game app** before preparing data:
 
 | Container path | Host path |
 |---|---|
-| `/app/data` | `/mnt/yumesute_preservation_server/yumesute_data` |
-| `/app/vendor` | `/mnt/yumesute_preservation_server/yumesute_vendor` |
-| `/app/private` | `/mnt/yumesute_preservation_server/yumesute_private` |
+| `/app/data` | `/mnt/yumesute_preservation_server/yumesute_app/data` |
+| `/app/vendor` | `/mnt/yumesute_preservation_server/yumesute_app/vendor` |
+| `/app/private` | `/mnt/yumesute_preservation_server/yumesute_app/private` |
 
 `vendor` includes the installed server and media; `private` includes media, local save information, WireGuard private keys, and the trusted CA. Keep these mounts intact through redeploys. Back up secrets and account files before migration.
+
+All three host paths sit under one `yumesute_app/` folder, but **mount them individually**. Do not mount the entire `/app` directory: that would hide the application code and `/app/.venv` installed by the image, and prevent updates on redeploy.
+
+For an existing installation using `/mnt/yumesute_preservation_server/yumesute_data` and `yumesute_vendor`, stop the old game service before copying those directories into the new `yumesute_app/data` and `yumesute_app/vendor` paths. If `/app/private` was not previously persistent, copy it from the old container's writable filesystem **before removing that container**. Verify the copied account files, CA keys, and installed media before changing CapRover's mounts; don't delete old data until the new installation is working. Keep database migration separate.
+
 
 Use **another CapRover app** for `postgres:17.6`, with `/var/lib/postgresql/data` mounted to `/var/lib/yumesute/postgres` (fast system disk). Choose database/user `yumesute` and a strong database password. Do not publish PostgreSQL to the internet. Ensure the game service can resolve/reach the PostgreSQL service name over the CapRover overlay network (typically `srv-captain--YOUR-POSTGRES-APP`).
 
