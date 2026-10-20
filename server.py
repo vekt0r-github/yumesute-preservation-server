@@ -214,7 +214,8 @@ def main():
     sub.add_parser('doctor')
     def startup_options(p):
         p.add_argument('--ca-dir',help='Reuse an existing local CA directory; saved for later starts')
-        p.add_argument('--host',help='LAN IPv4 override; otherwise detect the current address')
+        p.add_argument('--host',help='IPv4 listening address; otherwise detect the LAN address')
+        p.add_argument('--public-host',help='Reachable WireGuard endpoint address or DNS name (defaults to --host)')
         p.add_argument('--port',type=int);p.add_argument('--wg-port',type=int);p.add_argument('--cert-port',type=int)
         p.add_argument('--no-browser',action='store_true')
         p.add_argument('--no-docker',action='store_true',help='Require an already-running PostgreSQL service')
