@@ -185,18 +185,42 @@ def start(a):
     atomic_json(saved_path, {key:getattr(a,key) for key in ('port','wg_port','cert_port')})
     env=dict(os.environ,YUMESUTE_PORT=str(a.port))
     logdir=ROOT/'logs';logdir.mkdir(exist_ok=True)
-    with (logdir/'backend.log').open('a') as log:
+    backend_log=logdir/'backend.log'
+    with backend_log.open('a') as log:
         backend=subprocess.Popen([sys.executable,str(ROOT/'tools/serve.py')],cwd=ROOT,env=env,stdout=log,stderr=log)
         try:
             import httpx
-            for _ in range(100):
-                if backend.poll() is not None:raise RuntimeError('Backend exited; see logs/backend.log')
+            from collections import deque
+
+            def failure_details():
                 try:
-                    r=httpx.get(f'http://127.0.0.1:{a.port}/api/Environment/Ping',timeout=1)
-                    if r.status_code==200 and r.headers.get('X-Yumesute-Backend')=='local-preservation':break
-                except httpx.HTTPError:pass
-                time.sleep(.1)
-            else:raise RuntimeError('Backend startup timed out')
+                    with backend_log.open(errors='replace') as source:
+                        tail=''.join(deque(source, maxlen=50)).strip()
+                    return '\\nBackend log (last 50 lines):\\n'+tail if tail else '\\nBackend log is empty'
+                except OSError as error:
+                    return f'\\nCannot read {backend_log}: {error}'
+
+            timeout=float(os.getenv('YUMESUTE_START_TIMEOUT','180'))
+            if not 1 <= timeout <= 1800:
+                raise ValueError('YUMESUTE_START_TIMEOUT must be between 1 and 1800 seconds')
+            deadline=time.monotonic()+timeout
+            last_response='no response'
+            print(f'Waiting up to {timeout:g}s for local backend on port {a.port}...',flush=True)
+            with httpx.Client(timeout=1,trust_env=False) as client:
+                while time.monotonic()<deadline:
+                    if backend.poll() is not None:
+                        raise RuntimeError(f'Backend exited with status {backend.returncode}.'+failure_details())
+                    try:
+                        r=client.get(f'http://127.0.0.1:{a.port}/api/Environment/Ping')
+                        last_response=f'HTTP {r.status_code}, X-Yumesute-Backend={r.headers.get("X-Yumesute-Backend")!r}'
+                        if r.status_code==200 and r.headers.get('X-Yumesute-Backend')=='local-preservation':
+                            break
+                    except httpx.RequestError as exc:
+                        last_response=type(exc).__name__
+                    time.sleep(.5)
+                else:
+                    raise RuntimeError(f'Backend startup timed out after {timeout:g}s ({last_response}).'+failure_details())
+            print('Local backend is ready.',flush=True)
             from tunnel import run
             asyncio.run(run(a))
         finally:
