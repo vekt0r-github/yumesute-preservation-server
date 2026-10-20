@@ -146,10 +146,13 @@ def serve_certificate(host, port, cert):
 async def run(args):
     os.umask(0o077)
     host = str(ipaddress.IPv4Address(args.host or lan_ip()))
+    public_host = getattr(args, 'public_host', None) or host
+    if not public_host or any(c.isspace() or c in '/:@' for c in public_host):
+        raise ValueError('Invalid public host for WireGuard endpoint')
     private = ROOT / "private"
     private.mkdir(mode=0o700, exist_ok=True)
     ca_dir, ca_name, ca_fingerprint = prepare_ca(private, getattr(args, "ca_dir", None))
-    page = setup_page(private, host, args.wg_port, args.cert_port, ca_name, ca_fingerprint, args.port)
+    page = setup_page(private, public_host, args.wg_port, args.cert_port, ca_name, ca_fingerprint, args.port)
     # Keep non-game TLS connections opaque. The certificate download has no TLS.
     opts = options.Options(
         confdir=str(ca_dir),
